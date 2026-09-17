@@ -69,6 +69,70 @@ def stop():
         command_definition.deleteMe()
 
 
+# Set of known names and identifiers for 'Sketches' across supported languages in Fusion 360
+SKETCH_NAMES = {
+    # English
+    'sketches', 'sketch',
+    # German (Skizzen)
+    'skizzen', 'skizze',
+    # French (Esquisses)
+    'esquisses', 'esquisse',
+    # Spanish (Bocetos)
+    'bocetos', 'boceto',
+    # Italian (Schizzi)
+    'schizzi', 'schizzo',
+    # Japanese (スケッチ)
+    'スケッチ',
+    # Chinese Simplified (草图) & Traditional (草圖)
+    '草图', '草圖',
+    # Korean (스케치)
+    '스케치',
+    # Portuguese (Esboços)
+    'esboços', 'esboço', 'esbocos', 'esboco',
+    # Russian (Эскизы)
+    'эскизы', 'эскиз',
+    # Polish (Szkice)
+    'szkice', 'szkic',
+    # Turkish (Çizimler)
+    'çizimler', 'çizim', 'cizimler', 'cizim',
+    # Czech (Náčrty)
+    'náčrty', 'náčrt', 'nacrty', 'nacrt',
+}
+
+
+def get_sketch_item_index(list_items) -> int:
+    """
+    Searches through the listItems collection of VisibilityOverrideCommand to locate
+    the index (offset) of the 'Sketches' item dynamically.
+    
+    Checks both 'name' and 'id' properties against 'Sketches' as well as known
+    internationalized translations across supported Fusion 360 languages.
+    """
+    if not list_items or list_items.count == 0:
+        return -1
+
+    # Pass 1: Exact match on name or id
+    for i in range(list_items.count):
+        item = list_items.item(i)
+        name = (getattr(item, 'name', '') or '').strip().lower()
+        item_id = (getattr(item, 'id', '') or '').strip().lower()
+
+        if name in SKETCH_NAMES or (item_id and item_id in SKETCH_NAMES):
+            return i
+
+    # Pass 2: Substring match on name or id (e.g. in case of accelerator keys or prefixes)
+    for i in range(list_items.count):
+        item = list_items.item(i)
+        name = (getattr(item, 'name', '') or '').strip().lower()
+        item_id = (getattr(item, 'id', '') or '').strip().lower()
+
+        for target in SKETCH_NAMES:
+            if target in name or (item_id and target in item_id):
+                return i
+
+    return -1
+
+
 # Function that is called when a user clicks the corresponding button in the UI.
 # This defines the contents of the command dialog and connects to the command related events.
 def command_created(args: adsk.core.CommandCreatedEventArgs):
@@ -78,14 +142,30 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
         ui = app.userInterface
 
         control = ui.commandDefinitions.itemById('VisibilityOverrideCommand')
+        if not control:
+            raise RuntimeError("CommandDefinition 'VisibilityOverrideCommand' not found.")
+
         subcmd = control.controlDefinition
-        # Sketches Item (Only works until they add items before) - Can't use name as that is internationalised
-        sub = subcmd.listItems.item(8) 
-        
+        if not subcmd or not hasattr(subcmd, 'listItems'):
+            raise RuntimeError("ControlDefinition or listItems for 'VisibilityOverrideCommand' not found.")
+
+        # Dynamically locate the Sketches item offset across languages
+        sketch_index = get_sketch_item_index(subcmd.listItems)
+
+        if sketch_index < 0:
+            available_items = []
+            for i in range(subcmd.listItems.count):
+                item = subcmd.listItems.item(i)
+                available_items.append(f"[{i}] name='{getattr(item, 'name', '')}', id='{getattr(item, 'id', '')}'")
+            app.log(f"{CMD_NAME}: 'Sketches' not found. Available items: {', '.join(available_items)}", adsk.core.LogLevels.ErrorLogLevel)
+            raise RuntimeError(f"Could not locate 'Sketches' option in VisibilityOverrideCommand. Available items: {', '.join(available_items)}")
+
+        # Use the located offset to get the item and toggle its visibility state
+        sub = subcmd.listItems.item(sketch_index)
         sub.isSelected = not sub.isSelected
-        futil.log(f'{CMD_NAME} Sketch visibility located and toggled.  Now {str(sub.isSelected)}')
+        app.log(f'{CMD_NAME} Sketch visibility located at offset {sketch_index} ({getattr(sub, "name", "")}) and toggled. Now {str(sub.isSelected)}')
 
     except Exception as e:
+        futil.handle_error('command_created')
         if ui:
-            ui.messageBox('Sketch visibility Update Failed. Contact the add-in provider\n')
-
+            ui.messageBox(f'Sketch visibility Update Failed: {str(e)}\nContact the add-in provider\n')
