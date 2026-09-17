@@ -1,0 +1,13 @@
+{
+	"autodeskProduct":	"Fusion360",
+	"type":	"addin",
+	"id":	"39a8b16d-22ce-4e30-be54-de2b9d559892",
+	"author":	"Simon Love",
+	"description":	{
+		"":	"Adds a button to toggle -> Display Settings | Object Visibility | Sketches.\n\nThe button can be pinned to favorites or have a shortcut key assigned."
+	},
+	"version":	"0.1",
+	"runOnStartup":	true,
+	"supportedOS":	"windows|mac",
+	"editEnabled":	true
+}
